@@ -17,8 +17,12 @@ const tokenizer = new natural.WordTokenizer();
 // Store previous inputs (for demo purposes, stored in memory)
 let previousSentences = [];
 
-// Home route to take user input
+// Home route to display form and tokens
 app.get('/', (req, res) => {
+    const previousInputsHTML = previousSentences.length > 0
+        ? previousSentences.map(sentence => `<li>${sentence}</li>`).join('')
+        : '<p class="text-gray-500 text-center">No previous inputs yet.</p>';
+    
     res.send(`
         <!DOCTYPE html>
 <html lang="en">
@@ -27,6 +31,7 @@ app.get('/', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tokenize, Plot and Predict</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
     <style>
         body {
             background: linear-gradient(135deg, #ff5f6d, #ffc371);
@@ -107,7 +112,6 @@ app.get('/', (req, res) => {
             <button type="submit" class="w-full bg-pink-500 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out">
                 Tokenize, Plot & Predict
             </button>
-            <a href="/" class="text-pink-500 text-center block mt-2">Reset</a>
         </form>
     </div>
 
@@ -115,19 +119,16 @@ app.get('/', (req, res) => {
     <div class="container w-full max-w-md mt-6">
         <h2 class="text-xl font-semibold mb-4 text-center">Previous Inputs</h2>
         <ul class="list-disc list-inside text-gray-700">
-            ${previousSentences.length > 0 
-                ? previousSentences.map(sentence => `<li>${sentence}</li>`).join('') 
-                : '<p class="text-gray-500 text-center">No previous inputs yet.</p>'}
+            ${previousInputsHTML}
         </ul>
     </div>
 
 </body>
 </html>
-
     `);
 });
 
-// Route to handle tokenization and plotting
+// Route to handle tokenization, plotting, and displaying tokens on the same page
 app.post('/tokenize', (req, res) => {
     const sentence = req.body.sentence;
     const tokens = tokenizer.tokenize(sentence);
@@ -152,9 +153,9 @@ app.post('/tokenize', (req, res) => {
     const avgTokenLength = tokens.reduce((acc, token) => acc + token.length, 0) / tokens.length;
     const predictedTokenLength = avgTokenLength.toFixed(2); // Limit prediction to 2 decimal places
 
-    // Serve the HTML with embedded plot and styling
+    // Serve the HTML with embedded plot, input, and previous sentences
     res.send(`
-    <!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -222,11 +223,33 @@ app.post('/tokenize', (req, res) => {
                 opacity: 0.5;
             }
         }
+
+        input, button {
+            margin: 0.5rem;
+            padding: 0.5rem;
+            font-size: 1rem;
+            border: 2px solid #ff5f6d;
+            border-radius: 8px;
+        }
+
+        button {
+            background-color: #ff5f6d;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #ffc371;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center space-y-4">
     <div class="container w-full max-w-3xl">
-        <h1 class="title text-center mb-6">3D Token Plot</h1>
+        <h1 class="title text-center mb-6 fade-in">3D Token Plot</h1>
+        
+        <!-- Displaying Tokens -->
+        <p class="text-center text-xl mb-4">Tokens: ${tokens.join(', ')}</p>
 
         <!-- Plot Area -->
         <div id="plot" class="h-96"></div>
@@ -235,56 +258,50 @@ app.post('/tokenize', (req, res) => {
         <button id="clearPlotBtn" class="mt-4">Clear Plot</button>
     </div>
 
-    <a href="/" class="mt-4">Try another plot</a>
+    <!-- Previous Inputs Section -->
+    <div class="container w-full max-w-md mt-6">
+        <h2 class="text-xl font-semibold mb-4 text-center">Previous Inputs</h2>
+        <ul class="list-disc list-inside text-gray-700">
+            ${previousSentences.map(sentence => `<li>${sentence}</li>`).join('')}
+        </ul>
+    </div>
+
+    <a href="/" class="mt-4">Go back and try another plot</a>
 
     <script>
-        let tokens = ["Token1", "Token2", "Token3", "Token4"];  // Sample tokens
-        let x = tokens.map((_, index) => index);
-        let y = tokens.map(token => token.length);
-        let z = tokens.map(() => Math.random() * 10);
+        // Plotly 3D Plot
+        const trace = {
+            x: ${JSON.stringify(x)},
+            y: ${JSON.stringify(y)},
+            z: ${JSON.stringify(z)},
+            mode: 'markers+text',
+            marker: {
+                size: 12,
+                color: '#ff5f6d',
+                line: { color: '#ffc371', width: 2 },
+                opacity: 0.9
+            },
+            text: ${JSON.stringify(tokens)},
+            textposition: 'top center',
+            type: 'scatter3d'
+        };
 
-        // Function to plot the tokens in 3D
-        function plotTokens() {
-            const trace = {
-                x: x,
-                y: y,
-                z: z,
-                mode: 'markers+text',
-                marker: {
-                    size: 12,
-                    color: '#ff5f6d',
-                    line: {
-                        color: '#ffc371',
-                        width: 2
-                    },
-                    opacity: 0.9
-                },
-                text: tokens,
-                textposition: 'top center',
-                type: 'scatter3d'
-            };
+        const layout = {
+            title: \`3D Token Plot (Predicted Length: ${predictedTokenLength})\`,
+            autosize: true,
+            scene: {
+                xaxis: { title: 'Token Index', color: '#333' },
+                yaxis: { title: 'Token Length', color: '#333' },
+                zaxis: { title: 'Random Z', color: '#333' }
+            }
+        };
 
-            const layout = {
-                title: '3D Token Plot with Labels',
-                autosize: true,
-                scene: {
-                    xaxis: { title: 'Token Index', color: '#333' },
-                    yaxis: { title: 'Token Length', color: '#333' },
-                    zaxis: { title: 'Random Z', color: '#333' }
-                }
-            };
-
-            const data = [trace];
-            Plotly.newPlot('plot', data, layout);
-        }
+        Plotly.newPlot('plot', [trace], layout);
 
         // Clear Plot Functionality
         document.getElementById('clearPlotBtn').addEventListener('click', function() {
             Plotly.purge('plot');
         });
-
-        // Plot tokens on page load
-        plotTokens();
     </script>
 </body>
 </html>
